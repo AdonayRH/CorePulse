@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom' // usado en AdminDashboard
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, Dumbbell, Sparkles, ArrowLeft, LogOut } from 'lucide-react'
+import { BookOpen, Dumbbell, PlayCircle } from 'lucide-react'
 
 // --- Dashboard Component Imports ---
 import { Navbar } from '../components/dashboard/Navbar'
@@ -11,6 +11,8 @@ import { CourseDetailView } from '../components/dashboard/CourseDetailView'
 import { CourseModal } from '../components/dashboard/CourseModal'
 import { VideoUploadModal } from '../components/dashboard/VideoUploadModal'
 import { ToastContainer } from '../components/dashboard/Toast'
+import { StudentCourseCard } from '../components/dashboard/StudentCourseCard'
+import { StudentCourseView } from '../components/dashboard/StudentCourseView'
 
 // --- Initial Mock Data Schema ---
 const INITIAL_COURSES = [
@@ -87,64 +89,191 @@ const INITIAL_COURSES = [
 export function UserDashboard() {
   const { profile, signOut, isTrainer, isAdmin } = useAuth()
 
-  // Auto redirect trainers to their course workspace
-  if (isTrainer) {
-    return <TrainerDashboard />
+  const [activeTab, setActiveTab] = useState('courses')
+  const [activeCourseId, setActiveCourseId] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [toasts, setToasts] = useState([])
+  const [completedVideos, setCompletedVideos] = useState(() => {
+    const saved = localStorage.getItem('corepulse_completed_videos')
+    return saved ? JSON.parse(saved) : {}
+  })
+
+  const courses = useMemo(() => {
+    const saved = localStorage.getItem('corepulse_trainer_courses')
+    const all = saved ? JSON.parse(saved) : INITIAL_COURSES
+    return all.filter(c => c.status === 'published')
+  }, [])
+
+  const filteredCourses = useMemo(() => {
+    if (!searchQuery.trim()) return courses
+    const q = searchQuery.toLowerCase()
+    return courses.filter(c =>
+      c.title.toLowerCase().includes(q) ||
+      c.description?.toLowerCase().includes(q) ||
+      c.category?.toLowerCase().includes(q)
+    )
+  }, [courses, searchQuery])
+
+  const addToast = (message, type = 'success') => {
+    const id = `toast-${Date.now()}`
+    setToasts(prev => [...prev, { id, message, type }])
+  }
+  const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id))
+
+  // Early return DESPUÉS de todos los hooks
+  if (isTrainer || isAdmin) return <TrainerDashboard />
+
+  const activeCourse = courses.find(c => c.id === activeCourseId)
+
+  const getCourseProgress = (course) => {
+    const allVideos = course.chapters?.flatMap(ch => ch.videos ?? []) ?? []
+    if (allVideos.length === 0) return 0
+    const watched = allVideos.filter(v => completedVideos[v.id]).length
+    return Math.round((watched / allVideos.length) * 100)
   }
 
+  const handleToggleVideo = (videoId) => {
+    setCompletedVideos(prev => {
+      const updated = { ...prev, [videoId]: !prev[videoId] }
+      localStorage.setItem('corepulse_completed_videos', JSON.stringify(updated))
+      return updated
+    })
+  }
+
+  const totalWatched = Object.values(completedVideos).filter(Boolean).length
+  const totalAvailable = courses.reduce(
+    (sum, c) => sum + (c.chapters?.reduce((s, ch) => s + (ch.videos?.length ?? 0), 0) ?? 0), 0
+  )
+  const inProgress = courses.filter(c => {
+    const p = getCourseProgress(c)
+    return p > 0 && p < 100
+  }).length
+
   return (
-    <div className="min-h-screen bg-[#090b11] text-white flex flex-col justify-center items-center p-8 relative overflow-hidden font-sans">
-      {/* Background glow effects */}
-      <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-purple-650/5 rounded-full blur-[100px] pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none"></div>
+    <div className="h-full overflow-y-auto overflow-x-hidden bg-[#090b11] text-slate-100 font-sans relative selection:bg-purple-500 selection:text-white">
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-purple-600/5 rounded-full blur-[120px] -z-10 pointer-events-none" />
+      <div className="absolute top-1/3 right-1/4 w-[600px] h-[600px] bg-emerald-500/3 rounded-full blur-[150px] -z-10 pointer-events-none" />
 
-      <div className="max-w-md w-full bg-slate-900/30 border border-slate-800/80 backdrop-blur-md rounded-3xl p-8 text-center shadow-2xl space-y-6 relative z-10">
-        <div className="w-16 h-16 bg-purple-500/10 border border-purple-500/30 rounded-2xl flex items-center justify-center mx-auto text-purple-400 text-2xl font-black">
-          C
-        </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-white m-0">¡Bienvenido!</h1>
-        <p className="text-slate-400 text-sm leading-relaxed">
-          Hola, <span className="text-purple-400 font-bold">{profile?.full_name || 'Miembro CorePulse'}</span>. Estás en tu Panel de Usuario privado.
-        </p>
-        
-        <div className="p-5 bg-slate-950/80 rounded-2xl border border-slate-850/60 text-left space-y-3.5 text-xs text-slate-350 leading-relaxed">
-          <p className="flex justify-between border-b border-slate-900 pb-2">
-            <strong>Rol:</strong> <span>Alumno</span>
-          </p>
-          <p className="flex justify-between border-b border-slate-900 pb-2">
-            <strong>Acceso de Suscripción:</strong> <span className="text-emerald-400 font-bold">Activo ✅</span>
-          </p>
-          <p className="text-[10px] text-slate-500 leading-normal">
-            💡 Para acceder a las herramientas de gestión de contenidos (crear cursos, videos), debes iniciar sesión como instructor (trainer).
-          </p>
-        </div>
+      <Navbar
+        profile={profile}
+        onSignOut={signOut}
+        activeTab={activeTab}
+        setActiveTab={(tab) => {
+          setActiveTab(tab)
+          if (tab === 'courses') setActiveCourseId(null)
+        }}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        addToast={addToast}
+      />
 
-        <div className="flex flex-col gap-3 pt-2">
-          <Link to="/" className="w-full bg-slate-900 hover:bg-slate-850 border border-slate-800 text-white font-bold py-3.5 px-4 rounded-xl transition duration-200 text-center text-xs decoration-none">
-            Volver a la Landing
-          </Link>
-          <button 
-            onClick={signOut} 
-            className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-450 hover:text-white font-bold py-3.5 px-4 rounded-xl transition duration-200 text-xs cursor-pointer"
-          >
-            Cerrar Sesión
-          </button>
-        </div>
-      </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10 relative">
+        <AnimatePresence mode="wait">
+          {activeCourseId && activeCourse ? (
+            <motion.section
+              key="course-detail"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.25 }}
+            >
+              <StudentCourseView
+                course={activeCourse}
+                onBack={() => setActiveCourseId(null)}
+                completedVideos={completedVideos}
+                onToggleVideo={handleToggleVideo}
+              />
+            </motion.section>
+          ) : (
+            <motion.section
+              key="courses-list"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-8"
+            >
+              {/* Welcome */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight">
+                    Hola, <span className="bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent">
+                      {profile?.full_name?.split(' ')[0] || 'Atleta'}
+                    </span> 👋
+                  </h1>
+                  <p className="text-slate-400 text-sm mt-1">Continúa con tu formación donde lo dejaste.</p>
+                </div>
+                {/* <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl self-start sm:self-auto">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-emerald-400 text-xs font-bold">Suscripción Activa</span>
+                </div> */}
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                  { label: 'Cursos Disponibles', value: courses.length, Icon: BookOpen, accent: 'purple' },
+                  { label: 'Videos Vistos', value: `${totalWatched}/${totalAvailable}`, Icon: PlayCircle, accent: 'emerald' },
+                  { label: 'En Progreso', value: inProgress, Icon: Dumbbell, accent: 'blue' },
+                ].map(({ label, value, Icon, accent }) => (
+                  <div key={label} className="bg-slate-900/20 border border-slate-800/80 p-5 rounded-2xl flex items-center justify-between relative overflow-hidden backdrop-blur-md">
+                    <div>
+                      <span className="text-slate-500 text-xs font-bold uppercase tracking-wider block mb-1">{label}</span>
+                      <span className="text-3xl font-black text-white">{value}</span>
+                    </div>
+                    <div className={`w-11 h-11 bg-${accent}-500/10 border border-${accent}-500/30 rounded-xl flex items-center justify-center text-${accent}-400`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Course grid */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-black text-white">Mis Cursos</h2>
+                  <span className="text-xs text-slate-500">{filteredCourses.length} disponibles</span>
+                </div>
+
+                {filteredCourses.length === 0 ? (
+                  <div className="text-center py-20 bg-slate-900/20 border border-slate-800/80 rounded-3xl">
+                    <BookOpen className="w-10 h-10 text-slate-700 mx-auto mb-4" />
+                    <p className="text-slate-400 font-bold">No hay cursos disponibles</p>
+                    <p className="text-slate-600 text-xs mt-1">Los cursos publicados por tu entrenador aparecerán aquí</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredCourses.map(course => (
+                      <StudentCourseCard
+                        key={course.id}
+                        course={course}
+                        progress={getCourseProgress(course)}
+                        onView={() => setActiveCourseId(course.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.section>
+          )}
+        </AnimatePresence>
+      </main>
+
+      <ToastContainer toasts={toasts} onClose={removeToast} />
     </div>
   )
 }
 
 export function TrainerDashboard() {
   const { profile, signOut } = useAuth()
-  
+
   // Tab states: 'courses' or 'exercises'
   const [activeTab, setActiveTab] = useState('courses')
   const [searchQuery, setSearchQuery] = useState('')
-  
+
   // Custom toast list state
   const [toasts, setToasts] = useState([])
-  
+
   // Main Courses state, load from localStorage if exists for extreme persistent feeling
   const [courses, setCourses] = useState(() => {
     const saved = localStorage.getItem('corepulse_trainer_courses')
@@ -159,7 +288,7 @@ export function TrainerDashboard() {
   // --- MODALS TOGGLES ---
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false)
   const [selectedCourseForEdit, setSelectedCourseForEdit] = useState(null)
-  
+
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
   const [activeChapterIdForUpload, setActiveChapterIdForUpload] = useState(null)
 
@@ -178,11 +307,11 @@ export function TrainerDashboard() {
   }
 
   // --- COURSE CRUD OPERATIONS ---
-  
+
   const handleSaveCourseMetadata = (metadata) => {
     if (metadata.id) {
       // Edit mode
-      setCourses((prev) => 
+      setCourses((prev) =>
         prev.map((c) => (c.id === metadata.id ? { ...c, ...metadata } : c))
       )
       addToast('¡Datos del curso actualizados con éxito!', 'success')
@@ -216,8 +345,8 @@ export function TrainerDashboard() {
         if (c.id === courseId) {
           const nextStatus = c.status === 'published' ? 'draft' : 'published'
           addToast(
-            nextStatus === 'published' 
-              ? 'Curso publicado correctamente.' 
+            nextStatus === 'published'
+              ? 'Curso publicado correctamente.'
               : 'Curso guardado como borrador.',
             'success'
           )
@@ -234,7 +363,7 @@ export function TrainerDashboard() {
 
   // Save full course details (metadata & chapters together)
   const handleSaveCourseDetails = (updatedCourse, showToast = true) => {
-    setCourses((prev) => 
+    setCourses((prev) =>
       prev.map((c) => (c.id === updatedCourse.id ? updatedCourse : c))
     )
     if (showToast) {
@@ -294,7 +423,7 @@ export function TrainerDashboard() {
   const activeCourse = courses.find((c) => c.id === activeCourseId)
 
   return (
-    <div className="min-h-screen bg-[#090b11] text-slate-100 font-sans overflow-x-hidden relative selection:bg-purple-500 selection:text-white">
+    <div className="h-full overflow-y-auto overflow-x-hidden bg-[#090b11] text-slate-100 font-sans relative selection:bg-purple-500 selection:text-white">
       {/* ─── DYNAMIC BACKGROUND ORBS ─── */}
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-purple-600/5 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
       <div className="absolute top-1/3 right-1/4 w-[600px] h-[600px] bg-emerald-500/3 rounded-full blur-[150px] -z-10 pointer-events-none"></div>
@@ -328,7 +457,7 @@ export function TrainerDashboard() {
               className="max-w-2xl mx-auto text-center py-16 space-y-8 relative overflow-hidden rounded-3xl border border-slate-850/60 bg-slate-900/10 backdrop-blur-md p-8 sm:p-12"
             >
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-purple-500/5 rounded-full blur-[60px] pointer-events-none"></div>
-              
+
               <div className="w-16 h-16 bg-slate-950/80 border border-slate-850 rounded-2xl flex items-center justify-center mx-auto text-purple-400 shadow-2xl">
                 <Dumbbell className="w-7 h-7" />
               </div>
@@ -401,7 +530,7 @@ export function TrainerDashboard() {
       <ToastContainer toasts={toasts} onClose={removeToast} />
 
       {/* ─── DIALOG MODALS ─── */}
-      
+
       {/* Course Create/Edit Metadata Modal */}
       <CourseModal
         isOpen={isCourseModalOpen}
@@ -431,7 +560,7 @@ export function TrainerDashboard() {
 export function AdminDashboard() {
   const { profile, signOut } = useAuth()
   return (
-    <div className="min-h-screen bg-[#090b11] text-white flex flex-col justify-center items-center p-8 relative overflow-hidden font-sans">
+    <div className="h-full overflow-y-auto bg-[#090b11] text-white flex flex-col justify-center items-center p-8 relative overflow-x-hidden font-sans">
       {/* Background glow effects */}
       <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-purple-650/5 rounded-full blur-[100px] pointer-events-none"></div>
       <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none"></div>
@@ -444,7 +573,7 @@ export function AdminDashboard() {
         <p className="text-slate-400 text-sm">
           Hola, <span className="text-emerald-400 font-bold">{profile?.full_name || 'Admin'}</span>. Estás en la terminal root.
         </p>
-        
+
         <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-850/60 text-left space-y-2 text-xs text-slate-350">
           <p><strong>Rol:</strong> root_admin</p>
           <p><strong>Configuración global:</strong> Supabase DB Conectada ⚡</p>
@@ -457,8 +586,8 @@ export function AdminDashboard() {
           <Link to="/trainer" className="w-full bg-gradient-to-r from-purple-500 to-emerald-500 hover:from-purple-600 hover:to-emerald-600 text-white font-bold py-3.5 px-4 rounded-xl transition duration-200 text-center text-xs decoration-none">
             Ir a Panel de Trainer
           </Link>
-          <button 
-            onClick={signOut} 
+          <button
+            onClick={signOut}
             className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-450 hover:text-white font-bold py-3.5 px-4 rounded-xl transition duration-200 text-xs cursor-pointer"
           >
             Cerrar Sesión

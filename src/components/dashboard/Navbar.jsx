@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu, X, Search, LogOut, User, BookOpen, Dumbbell, ChevronDown } from 'lucide-react'
+import { ProfileModal } from './ProfileModal'
 
 export function Navbar({ 
   profile, 
@@ -13,6 +14,7 @@ export function Navbar({
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
   const profileMenuRef = useRef(null)
 
   // Close profile dropdown when clicking outside
@@ -52,6 +54,7 @@ export function Navbar({
   }
 
   return (
+    <>
     <header className="sticky top-0 z-40 w-full bg-[#090b11]/80 backdrop-blur-xl border-b border-slate-900/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
         
@@ -143,14 +146,13 @@ export function Navbar({
                 </div>
 
                 <div className="p-1">
-                  <Link
-                    to="/"
-                    className="flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-900 transition duration-150 decoration-none"
-                    onClick={() => setProfileMenuOpen(false)}
+                  <button
+                    onClick={() => { setProfileMenuOpen(false); setProfileModalOpen(true) }}
+                    className="w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-900 transition duration-150 cursor-pointer border-0 bg-transparent text-left"
                   >
                     <User className="w-4 h-4 text-slate-500" />
-                    Ver Landing Pública
-                  </Link>
+                    Editar Perfil
+                  </button>
 
                   <button
                     onClick={() => {
@@ -223,5 +225,8 @@ export function Navbar({
         </div>
       )}
     </header>
+
+    <ProfileModal isOpen={profileModalOpen} onClose={() => setProfileModalOpen(false)} />
+    </>
   )
 }

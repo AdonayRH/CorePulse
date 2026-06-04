@@ -40,6 +40,18 @@ export function useAuth() {
         setLoading(false)
     }
 
+    async function fetchProfile(userId) {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single()
+
+        console.log('Profile desde BD:', data, 'Error:', error) // ← debug temporal
+        setProfile(data)
+        setLoading(false)
+    }
+
     async function signIn(email, password) {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         return { error }

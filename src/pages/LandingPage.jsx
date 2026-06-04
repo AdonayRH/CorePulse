@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import heroCoach from '../assets/hero_coach.png'
 
 export default function LandingPage() {
-  const [activePlanTab, setActivePlanTab] = useState('quarterly')
+  const [activePlanTab, setActivePlanTab] = useState('3months')
 
   // Smooth scroll helper
   const scrollToSection = (id) => {
@@ -364,17 +364,17 @@ export default function LandingPage() {
                 >
                   Mensual
                 </button>
-                <button 
-                  onClick={() => setActivePlanTab('quarterly')} 
-                  className={`px-5 py-2 rounded-xl text-xs md:text-sm font-bold transition-all duration-200 cursor-pointer ${activePlanTab === 'quarterly' ? 'bg-purple-650 text-white shadow' : 'text-slate-400 hover:text-slate-200 bg-transparent border-0'}`}
+                <button
+                  onClick={() => setActivePlanTab('3months')}
+                  className={`px-5 py-2 rounded-xl text-xs md:text-sm font-bold transition-all duration-200 cursor-pointer ${activePlanTab === '3months' ? 'bg-purple-650 text-white shadow' : 'text-slate-400 hover:text-slate-200 bg-transparent border-0'}`}
                 >
-                  Trimestral (Recomendado)
+                  3 Meses (Recomendado)
                 </button>
-                <button 
-                  onClick={() => setActivePlanTab('annual')} 
-                  className={`px-5 py-2 rounded-xl text-xs md:text-sm font-bold transition-all duration-200 cursor-pointer ${activePlanTab === 'annual' ? 'bg-purple-650 text-white shadow' : 'text-slate-400 hover:text-slate-200 bg-transparent border-0'}`}
+                <button
+                  onClick={() => setActivePlanTab('6months')}
+                  className={`px-5 py-2 rounded-xl text-xs md:text-sm font-bold transition-all duration-200 cursor-pointer ${activePlanTab === '6months' ? 'bg-purple-650 text-white shadow' : 'text-slate-400 hover:text-slate-200 bg-transparent border-0'}`}
                 >
-                  Anual (Mejor Valor)
+                  6 Meses (Mejor Valor)
                 </button>
               </div>
             </div>
@@ -406,7 +406,7 @@ export default function LandingPage() {
                   </div>
                   <div className="md:col-span-5 text-center md:text-right space-y-4">
                     <div>
-                      <span className="text-5xl font-extrabold text-white">49€</span>
+                      <span className="text-5xl font-extrabold text-white">125€</span>
                       <span className="text-slate-500 font-medium"> / mes</span>
                     </div>
                     <Link to="/register" className="w-full inline-block bg-purple-500 hover:bg-purple-600 text-white font-extrabold py-3.5 px-6 rounded-xl transition duration-200 text-center decoration-none text-sm">
@@ -416,7 +416,7 @@ export default function LandingPage() {
                 </div>
               )}
 
-              {activePlanTab === 'quarterly' && (
+              {activePlanTab === '3months' && (
                 <div className="bg-slate-900/50 border-2 border-purple-550 rounded-3xl p-8 md:p-12 text-left grid md:grid-cols-12 gap-8 items-center relative overflow-hidden shadow-2xl shadow-purple-500/5">
                   {/* Popular tag */}
                   <div className="absolute top-4 right-4 bg-purple-500 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full">
@@ -424,8 +424,8 @@ export default function LandingPage() {
                   </div>
                   <div className="md:col-span-7 space-y-6">
                     <h3 className="text-2xl font-extrabold text-white flex items-center gap-2">
-                      Plan Trimestral
-                      <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">Ahorra 18%</span>
+                      Plan 3 Meses
+                      <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">Ahorra 20%</span>
                     </h3>
                     <p className="text-slate-400 text-sm leading-relaxed">
                       El periodo recomendado por la ciencia. 90 días son suficientes para lograr adaptaciones neuromusculares y hábitos nutricionales sólidos.
@@ -451,24 +451,24 @@ export default function LandingPage() {
                   </div>
                   <div className="md:col-span-5 text-center md:text-right space-y-4">
                     <div>
-                      <span className="text-5xl font-extrabold text-white">120€</span>
-                      <span className="text-slate-500 font-medium"> / trimestre</span>
-                      <p className="text-xs text-slate-500 mt-1">Equivale a solo 40€ al mes</p>
+                      <span className="text-5xl font-extrabold text-white">300€</span>
+                      <span className="text-slate-500 font-medium"> / 3 meses</span>
+                      <p className="text-xs text-slate-500 mt-1">Equivale a solo 100€ al mes</p>
                     </div>
                     <Link to="/register" className="w-full inline-block bg-gradient-to-r from-purple-500 to-emerald-500 hover:from-purple-600 hover:to-emerald-600 text-white font-extrabold py-3.5 px-6 rounded-xl transition duration-200 text-center shadow-lg shadow-purple-500/10 decoration-none text-sm">
-                      Elegir Plan Trimestral
+                      Elegir Plan 3 Meses
                     </Link>
                   </div>
                 </div>
               )}
 
-              {activePlanTab === 'annual' && (
+              {activePlanTab === '6months' && (
                 <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-8 md:p-12 text-left grid md:grid-cols-12 gap-8 items-center relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl"></div>
                   <div className="md:col-span-7 space-y-6">
                     <h3 className="text-2xl font-extrabold text-white flex items-center gap-2">
-                      Plan Anual
-                      <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">Ahorra 38%</span>
+                      Plan 6 Meses
+                      <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">Ahorra 30%</span>
                     </h3>
                     <p className="text-slate-400 text-sm leading-relaxed">
                       El plan del máximo compromiso. Construye una transformación absoluta que mantendrás por el resto de tu vida.
@@ -490,12 +490,12 @@ export default function LandingPage() {
                   </div>
                   <div className="md:col-span-5 text-center md:text-right space-y-4">
                     <div>
-                      <span className="text-5xl font-extrabold text-white">360€</span>
-                      <span className="text-slate-500 font-medium"> / año</span>
-                      <p className="text-xs text-slate-500 mt-1">Equivale a solo 30€ al mes</p>
+                      <span className="text-5xl font-extrabold text-white">525€</span>
+                      <span className="text-slate-500 font-medium"> / 6 meses</span>
+                      <p className="text-xs text-slate-500 mt-1">Equivale a solo 87,50€ al mes</p>
                     </div>
                     <Link to="/register" className="w-full inline-block bg-purple-500 hover:bg-purple-600 text-white font-extrabold py-3.5 px-6 rounded-xl transition duration-200 text-center decoration-none text-sm">
-                      Elegir Plan Anual
+                      Elegir Plan 6 Meses
                     </Link>
                   </div>
                 </div>
