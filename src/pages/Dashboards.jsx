@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { Link } from 'react-router-dom' // usado en AdminDashboard
+import { useSubscription } from '../hooks/useSubscription'
+import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, Dumbbell, PlayCircle } from 'lucide-react'
+import { BookOpen, Dumbbell, PlayCircle, ArrowLeft, Lock, AlertTriangle, Clock, LogOut } from 'lucide-react'
 
 // --- Dashboard Component Imports ---
 import { Navbar } from '../components/dashboard/Navbar'
@@ -86,8 +87,52 @@ const INITIAL_COURSES = [
   }
 ]
 
+const GATE_CONFIG = {
+  none: {
+    Icon: Lock,
+    iconBg: 'bg-purple-500/10',
+    iconBorder: 'border-purple-500/30',
+    iconText: 'text-purple-400',
+    title: 'Activa tu suscripción',
+    message: 'Para acceder a los cursos y todo el contenido de entrenamiento necesitas una suscripción activa.',
+    ctaLabel: 'Ver planes',
+  },
+  canceled: {
+    Icon: Clock,
+    iconBg: 'bg-slate-800/80',
+    iconBorder: 'border-slate-700/80',
+    iconText: 'text-slate-400',
+    title: 'Esperamos volver a verte pronto',
+    message: 'Tu suscripción fue cancelada. Puedes reactivarla en cualquier momento y retomar donde lo dejaste.',
+    ctaLabel: 'Reactivar suscripción',
+  },
+  payment_failed: {
+    Icon: AlertTriangle,
+    iconBg: 'bg-rose-500/10',
+    iconBorder: 'border-rose-500/30',
+    iconText: 'text-rose-400',
+    title: 'Tu suscripción no se ha podido renovar',
+    message: 'Hubo un problema al procesar el pago. Actualiza tu método de pago para continuar accediendo al contenido.',
+    ctaLabel: 'Actualizar método de pago',
+  },
+}
+
+const STATUS_LABELS = {
+  canceled:  'Cancelada',
+  past_due:  'Pago fallido',
+  unpaid:    'Sin pago',
+  incomplete: 'Incompleto',
+}
+
+function getGateKey(subscription) {
+  if (!subscription) return 'none'
+  if (subscription.status === 'canceled') return 'canceled'
+  return 'payment_failed'
+}
+
 export function UserDashboard() {
-  const { profile, signOut, isTrainer, isAdmin } = useAuth()
+  const { profile, signOut, isTrainer, isAdmin, loading: authLoading } = useAuth()
+  const { subscription, loading: subLoading, hasAccess } = useSubscription()
 
   const [activeTab, setActiveTab] = useState('courses')
   const [activeCourseId, setActiveCourseId] = useState(null)
@@ -122,6 +167,87 @@ export function UserDashboard() {
 
   // Early return DESPUÉS de todos los hooks
   if (isTrainer || isAdmin) return <TrainerDashboard />
+
+  if (authLoading || subLoading) {
+    return (
+      <div className="h-full bg-[#090b11] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-purple-500/40 border-t-purple-500 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!hasAccess) {
+    const gateKey = getGateKey(subscription)
+    const { Icon, iconBg, iconBorder, iconText, title, message, ctaLabel } = GATE_CONFIG[gateKey]
+    const statusLabel = STATUS_LABELS[subscription?.status]
+
+    return (
+      <div className="h-full overflow-y-auto overflow-x-hidden bg-[#090b11] text-slate-100 font-sans relative">
+        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-purple-600/5 rounded-full blur-[120px] -z-10 pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-rose-500/3 rounded-full blur-[150px] -z-10 pointer-events-none" />
+
+        <header className="sticky top-0 z-40 w-full bg-[#090b11]/80 backdrop-blur-xl border-b border-slate-900/80">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-3 group decoration-none">
+              <span className="w-10 h-10 bg-gradient-to-tr from-purple-500 to-emerald-500 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-purple-500/20 group-hover:scale-105 transition-transform duration-200">C</span>
+              <span className="text-xl font-black tracking-tight text-white group-hover:text-purple-400 transition-colors duration-200">
+                Core<span className="bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent">Pulse</span>
+              </span>
+            </Link>
+            <button
+              onClick={signOut}
+              className="flex items-center gap-2 text-slate-400 hover:text-rose-400 text-sm font-semibold transition duration-200 cursor-pointer border-0 bg-transparent"
+            >
+              <LogOut className="w-4 h-4" />
+              Salir
+            </button>
+          </div>
+        </header>
+
+        <div className="flex items-center justify-center min-h-[calc(100svh-80px)] px-4 py-16">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="max-w-md w-full bg-slate-900/30 border border-slate-800/80 backdrop-blur-md rounded-3xl p-8 text-center space-y-6"
+          >
+            <div className={`w-16 h-16 ${iconBg} border ${iconBorder} rounded-2xl flex items-center justify-center mx-auto`}>
+              <Icon className={`w-7 h-7 ${iconText}`} />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-xl font-black text-white">{title}</h2>
+              <p className="text-slate-400 text-sm leading-relaxed">{message}</p>
+            </div>
+
+            {statusLabel && (
+              <div className="flex items-center justify-center gap-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 text-xs">
+                <span className="text-slate-500">Estado de suscripción:</span>
+                <span className={gateKey === 'canceled' ? 'text-slate-300 font-bold' : 'text-rose-400 font-bold'}>
+                  {statusLabel}
+                </span>
+              </div>
+            )}
+
+            <div className="space-y-3 pt-2">
+              <Link
+                to="/"
+                className="block w-full bg-gradient-to-r from-purple-500 to-emerald-500 hover:from-purple-600 hover:to-emerald-600 text-white font-bold py-3.5 px-4 rounded-xl transition duration-200 text-sm decoration-none text-center"
+              >
+                {ctaLabel}
+              </Link>
+              <button
+                onClick={signOut}
+                className="w-full text-slate-500 hover:text-slate-300 text-sm font-semibold py-2 transition duration-200 cursor-pointer border-0 bg-transparent"
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    )
+  }
 
   const activeCourse = courses.find(c => c.id === activeCourseId)
 
@@ -203,10 +329,12 @@ export function UserDashboard() {
                   </h1>
                   <p className="text-slate-400 text-sm mt-1">Continúa con tu formación donde lo dejaste.</p>
                 </div>
-                {/* <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl self-start sm:self-auto">
+                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl self-start sm:self-auto">
                   <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-emerald-400 text-xs font-bold">Suscripción Activa</span>
-                </div> */}
+                  <span className="text-emerald-400 text-xs font-bold">
+                    {subscription?.plan?.name ?? 'Suscripción Activa'}
+                  </span>
+                </div>
               </div>
 
               {/* Stats */}

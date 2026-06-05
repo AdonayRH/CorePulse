@@ -29,3 +29,6 @@ dist-ssr
 .env.test
 .env.*
 supabase/*
+.claude/*
+docs/*
+CLAUDE.md

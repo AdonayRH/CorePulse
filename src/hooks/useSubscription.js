@@ -24,7 +24,6 @@ export function useSubscription() {
       .from('subscriptions')
       .select('*, plan:plans(name, interval)')
       .eq('user_id', user.id)
-      .in('status', ['active', 'past_due'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -33,7 +32,8 @@ export function useSubscription() {
     setLoading(false)
   }
 
-  const hasAccess = EXEMPT_ROLES.includes(profile?.role) || subscription?.status === 'active'
+  const hasAccess = EXEMPT_ROLES.includes(profile?.role) ||
+    ['active', 'trialing'].includes(subscription?.status)
 
   return { subscription, loading, hasAccess }
 }
