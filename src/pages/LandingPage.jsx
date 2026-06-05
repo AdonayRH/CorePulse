@@ -409,7 +409,7 @@ export default function LandingPage() {
                       <span className="text-5xl font-extrabold text-white">125€</span>
                       <span className="text-slate-500 font-medium"> / mes</span>
                     </div>
-                    <Link to="/register" className="w-full inline-block bg-purple-500 hover:bg-purple-600 text-white font-extrabold py-3.5 px-6 rounded-xl transition duration-200 text-center decoration-none text-sm">
+                    <Link to="/register?plan=monthly" className="w-full inline-block bg-purple-500 hover:bg-purple-600 text-white font-extrabold py-3.5 px-6 rounded-xl transition duration-200 text-center decoration-none text-sm">
                       Elegir Plan Mensual
                     </Link>
                   </div>
@@ -455,7 +455,7 @@ export default function LandingPage() {
                       <span className="text-slate-500 font-medium"> / 3 meses</span>
                       <p className="text-xs text-slate-500 mt-1">Equivale a solo 100€ al mes</p>
                     </div>
-                    <Link to="/register" className="w-full inline-block bg-gradient-to-r from-purple-500 to-emerald-500 hover:from-purple-600 hover:to-emerald-600 text-white font-extrabold py-3.5 px-6 rounded-xl transition duration-200 text-center shadow-lg shadow-purple-500/10 decoration-none text-sm">
+                    <Link to="/register?plan=3months" className="w-full inline-block bg-gradient-to-r from-purple-500 to-emerald-500 hover:from-purple-600 hover:to-emerald-600 text-white font-extrabold py-3.5 px-6 rounded-xl transition duration-200 text-center shadow-lg shadow-purple-500/10 decoration-none text-sm">
                       Elegir Plan 3 Meses
                     </Link>
                   </div>
@@ -494,7 +494,7 @@ export default function LandingPage() {
                       <span className="text-slate-500 font-medium"> / 6 meses</span>
                       <p className="text-xs text-slate-500 mt-1">Equivale a solo 87,50€ al mes</p>
                     </div>
-                    <Link to="/register" className="w-full inline-block bg-purple-500 hover:bg-purple-600 text-white font-extrabold py-3.5 px-6 rounded-xl transition duration-200 text-center decoration-none text-sm">
+                    <Link to="/register?plan=6months" className="w-full inline-block bg-purple-500 hover:bg-purple-600 text-white font-extrabold py-3.5 px-6 rounded-xl transition duration-200 text-center decoration-none text-sm">
                       Elegir Plan 6 Meses
                     </Link>
                   </div>
