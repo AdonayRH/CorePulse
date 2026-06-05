@@ -1,24 +1,39 @@
-import { Navigate } from 'react-router-dom'
-import { useAuth } from '../../hooks/useAuth'
-import { useSubscription } from '../../hooks/useSubscription'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import { useAuth } from './useAuth'
 
-export function ProtectedRoute({ children, allowedRoles, requireSubscription = true }) {
-    const { user, profile, loading: authLoading } = useAuth()
-    const { hasAccess, loading: subLoading } = useSubscription()
+const EXEMPT_ROLES = ['admin', 'trainer']
 
-    if (authLoading || subLoading) return <div>Cargando...</div>
+export function useSubscription() {
+  const { user, profile } = useAuth()
+  const [subscription, setSubscription] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-    if (!user) return <Navigate to="/login" replace />
-
-    if (allowedRoles && !allowedRoles.includes(profile?.role)) {
-        return <Navigate to="/unauthorized" replace />
+  useEffect(() => {
+    if (!user) { setLoading(false); return }
+    if (EXEMPT_ROLES.includes(profile?.role)) {
+      setSubscription({ status: 'active' })
+      setLoading(false)
+      return
     }
+    fetchSubscription()
+  }, [user, profile?.role])
 
-    // Admin y Trainer siempre tienen acceso sin suscripción
-    const exemptRoles = ['admin', 'trainer']
-    if (requireSubscription && !exemptRoles.includes(profile?.role) && !hasAccess) {
-        return <Navigate to="/pricing" replace />
-    }
+  async function fetchSubscription() {
+    const { data } = await supabase
+      .from('subscriptions')
+      .select('*, plan:plans(name, interval)')
+      .eq('user_id', user.id)
+      .in('status', ['active', 'past_due'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-    return children
+    setSubscription(data)
+    setLoading(false)
+  }
+
+  const hasAccess = EXEMPT_ROLES.includes(profile?.role) || subscription?.status === 'active'
+
+  return { subscription, loading, hasAccess }
 }

@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, User, Camera, CreditCard, Save, Check, Upload, Shield } from 'lucide-react'
+import { X, User, Camera, CreditCard, Save, Check, Upload, Shield, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import { useSubscription } from '../../hooks/useSubscription'
+import { PLANS, redirectToCheckout } from '../../lib/stripe'
 
 const TABS = [
   { id: 'perfil', label: 'Perfil', Icon: User },
@@ -10,39 +12,11 @@ const TABS = [
   { id: 'suscripcion', label: 'Suscripción', Icon: CreditCard },
 ]
 
-const PLANS = [
-  {
-    id: 'monthly',
-    name: 'Plan Mensual',
-    price: '125€',
-    period: '/ mes',
-    equivalent: null,
-    savings: null,
-    highlight: false,
-  },
-  {
-    id: '3months',
-    name: 'Plan 3 Meses',
-    price: '300€',
-    period: '/ 3 meses',
-    equivalent: '100€/mes',
-    savings: 'Ahorra 20%',
-    highlight: true,
-  },
-  {
-    id: '6months',
-    name: 'Plan 6 Meses',
-    price: '525€',
-    period: '/ 6 meses',
-    equivalent: '87,50€/mes',
-    savings: 'Ahorra 30%',
-    highlight: false,
-  },
-]
-
 export function ProfileModal({ isOpen, onClose }) {
   const { user, profile } = useAuth()
+  const { subscription } = useSubscription()
   const [activeTab, setActiveTab] = useState('perfil')
+  const [checkoutLoading, setCheckoutLoading] = useState(null) // plan id being loaded
 
   // Perfil tab
   const [fullName, setFullName] = useState('')
@@ -66,6 +40,17 @@ export function ProfileModal({ isOpen, onClose }) {
       setSaveError('')
     }
   }, [isOpen])
+
+  const handleSelectPlan = async (plan) => {
+    if (!plan.priceId || plan.priceId.startsWith('price_XXXX')) return
+    setCheckoutLoading(plan.id)
+    try {
+      await redirectToCheckout(plan.priceId, user.id, profile?.email)
+    } catch (err) {
+      console.error('Checkout error:', err)
+      setCheckoutLoading(null)
+    }
+  }
 
   const handleSaveProfile = async () => {
     if (!fullName.trim()) return
@@ -274,13 +259,20 @@ export function ProfileModal({ isOpen, onClose }) {
                   className="space-y-3"
                 >
                   {/* Current status */}
-                  <div className="flex items-center justify-between p-3.5 bg-emerald-500/5 border border-emerald-500/20 rounded-xl mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-sm font-bold text-emerald-400">Suscripción Activa</span>
+                  {subscription?.status === 'active' ? (
+                    <div className="flex items-center justify-between p-3.5 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-sm font-bold text-emerald-400">Suscripción Activa</span>
+                      </div>
+                      <span className="text-xs text-slate-400 font-semibold">{subscription.plan?.name}</span>
                     </div>
-                    <span className="text-xs text-slate-500">Gestiona tu plan</span>
-                  </div>
+                  ) : (
+                    <div className="flex items-center gap-2 p-3.5 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+                      <div className="w-2 h-2 rounded-full bg-amber-400" />
+                      <span className="text-sm font-bold text-amber-400">Sin suscripción activa</span>
+                    </div>
+                  )}
 
                   {PLANS.map(plan => (
                     <div
@@ -291,18 +283,13 @@ export function ProfileModal({ isOpen, onClose }) {
                           : 'border-slate-800/80 bg-slate-900/20'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-bold text-white">{plan.name}</p>
                             {plan.savings && (
                               <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-md">
                                 {plan.savings}
-                              </span>
-                            )}
-                            {plan.highlight && (
-                              <span className="text-[10px] font-black text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.5 rounded-md uppercase tracking-wide">
-                                Popular
                               </span>
                             )}
                           </div>
@@ -310,16 +297,31 @@ export function ProfileModal({ isOpen, onClose }) {
                             <p className="text-[10px] text-slate-500 mt-0.5">{plan.equivalent}</p>
                           )}
                         </div>
-                        <div className="text-right">
-                          <span className="text-xl font-black text-white">{plan.price}</span>
-                          <span className="text-xs text-slate-500 ml-1">{plan.period}</span>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          <div className="text-right">
+                            <span className="text-lg font-black text-white">{plan.price}</span>
+                            <span className="text-[10px] text-slate-500 ml-1">{plan.period}</span>
+                          </div>
+                          <button
+                            onClick={() => handleSelectPlan(plan)}
+                            disabled={!!checkoutLoading}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all duration-200 cursor-pointer border-0 disabled:opacity-50 ${
+                              plan.highlight
+                                ? 'bg-gradient-to-r from-purple-500 to-emerald-500 text-white'
+                                : 'bg-slate-800 hover:bg-slate-700 text-white'
+                            }`}
+                          >
+                            {checkoutLoading === plan.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : 'Elegir'}
+                          </button>
                         </div>
                       </div>
                     </div>
                   ))}
 
                   <p className="text-[10px] text-slate-600 text-center pt-1">
-                    El cambio de plan se procesará en el próximo ciclo de facturación.
+                    El pago se gestiona de forma segura a través de Stripe.
                   </p>
                 </motion.div>
               )}
