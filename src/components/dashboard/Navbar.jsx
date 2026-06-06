@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu, X, Search, LogOut, User, BookOpen, Dumbbell, ChevronDown } from 'lucide-react'
 import { ProfileModal } from './ProfileModal'
+import { Logo } from '../Logo'
 
 export function Navbar({ 
   profile, 
@@ -60,13 +61,8 @@ export function Navbar({
         
         {/* Brand Logo */}
         <div className="flex items-center gap-8">
-          <Link to="/" className="flex items-center gap-3 group decoration-none flex-shrink-0">
-            <span className="w-10 h-10 bg-gradient-to-tr from-purple-500 to-emerald-500 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-purple-500/20 group-hover:scale-105 transition-transform duration-300">
-              C
-            </span>
-            <span className="text-xl sm:text-2xl font-black tracking-tight text-white">
-              Core<span className="bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent">Pulse</span>
-            </span>
+          <Link to="/" className="flex-shrink-0 decoration-none">
+            <Logo size="md" />
           </Link>
 
           {/* Desktop Nav Links */}

@@ -3,6 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Zap } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { redirectToCheckout } from '../lib/stripe'
+import { Logo } from '../components/Logo'
 
 const PLAN_META = {
   monthly:  { label: 'Plan Mensual',  price: '125€/mes',     priceId: import.meta.env.VITE_STRIPE_PRICE_MONTHLY },
@@ -75,11 +76,8 @@ export default function RegisterPage() {
 
       <div className="max-w-md w-full bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-3xl p-8 md:p-10 shadow-2xl space-y-8 relative">
         <div className="text-center space-y-2">
-          <Link to="/" className="inline-flex items-center gap-2 group decoration-none">
-            <span className="w-10 h-10 bg-gradient-to-tr from-purple-500 to-emerald-500 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-purple-500/20 group-hover:scale-105 transition-transform duration-200">C</span>
-            <span className="text-2xl font-black tracking-tight text-white group-hover:text-purple-400 transition-colors duration-200">
-              Core<span className="bg-gradient-to-r from-purple-400 to-emerald-400 bg-clip-text text-transparent">Pulse</span>
-            </span>
+          <Link to="/" className="inline-flex decoration-none">
+            <Logo size="lg" />
           </Link>
           <h2 className="text-3xl font-extrabold tracking-tight mt-6 mb-2">Comienza tu Cambio</h2>
           <p className="text-slate-400 text-sm">Entrena inteligente. Aliméntate bien. Alcanza tus metas.</p>
