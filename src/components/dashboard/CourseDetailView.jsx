@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { ChapterAccordion } from './ChapterAccordion'
+import { VideoPlayerModal } from './VideoPlayerModal'
 import { ArrowLeft, BookOpen, Trash2, Eye, EyeOff, Save, Film, Clock, Sparkles } from 'lucide-react'
 
 export function CourseDetailView({ 
@@ -16,6 +17,7 @@ export function CourseDetailView({
   const [status, setStatus] = useState('draft')
   const [chapters, setChapters] = useState([])
   const [isSaving, setIsSaving] = useState(false)
+  const [playerVideo, setPlayerVideo] = useState(null) // { url, title } | null
 
   // Initialize form when course prop changes
   useEffect(() => {
@@ -264,12 +266,20 @@ export function CourseDetailView({
               chapters={chapters}
               onUpdateChapters={handleUpdateChapters}
               onTriggerUpload={onTriggerUpload}
+              onPreviewVideo={(url, title) => setPlayerVideo({ url, title })}
               addToast={addToast}
             />
           </div>
         </div>
 
       </div>
+
+      <VideoPlayerModal
+        isOpen={!!playerVideo}
+        onClose={() => setPlayerVideo(null)}
+        videoUrl={playerVideo?.url}
+        title={playerVideo?.title}
+      />
     </div>
   )
 }

@@ -4,11 +4,13 @@ import {
   ArrowLeft, ChevronDown, PlayCircle, CheckCircle2,
   Clock, BookOpen, Trophy, BarChart2
 } from 'lucide-react'
+import { VideoPlayerModal } from './VideoPlayerModal'
 
 export function StudentCourseView({ course, onBack, completedVideos, onToggleVideo }) {
   const [openChapters, setOpenChapters] = useState(
     course.chapters?.length > 0 ? [course.chapters[0].id] : []
   )
+  const [playerVideo, setPlayerVideo] = useState(null) // { url, title } | null
 
   const allVideos = course.chapters?.flatMap(ch => ch.videos ?? []) ?? []
   const totalVideos = allVideos.length
@@ -20,6 +22,17 @@ export function StudentCourseView({ course, onBack, completedVideos, onToggleVid
     setOpenChapters(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     )
+
+  const handlePlayVideo = (video) => {
+    if (video.video_url) {
+      setPlayerVideo({ url: video.video_url, title: video.title })
+      // Auto-mark as watched when the user opens the player
+      if (!completedVideos[video.id]) onToggleVideo(video.id)
+    } else {
+      // No real URL yet — just toggle watched state
+      onToggleVideo(video.id)
+    }
+  }
 
   const STATS = [
     { label: 'Capítulos', value: course.chapters?.length ?? 0, Icon: BookOpen, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
@@ -130,6 +143,8 @@ export function StudentCourseView({ course, onBack, completedVideos, onToggleVid
                     <div className="p-4 space-y-2">
                       {chapter.videos?.map((video, vIdx) => {
                         const watched = completedVideos[video.id]
+                        const hasUrl = !!video.video_url
+
                         return (
                           <div
                             key={video.id}
@@ -139,26 +154,49 @@ export function StudentCourseView({ course, onBack, completedVideos, onToggleVid
                                 : 'bg-slate-950/40 border-slate-800/40 hover:border-slate-700/60'
                             }`}
                           >
+                            {/* Play / check toggle */}
                             <button
-                              onClick={() => onToggleVideo(video.id)}
+                              onClick={() => handlePlayVideo(video)}
                               className={`flex-shrink-0 transition duration-200 cursor-pointer border-0 bg-transparent p-0 ${
                                 watched ? 'text-emerald-400' : 'text-slate-500 hover:text-purple-400'
                               }`}
+                              title={hasUrl ? 'Ver video' : 'Marcar como visto'}
                             >
                               {watched
                                 ? <CheckCircle2 className="w-5 h-5" />
                                 : <PlayCircle className="w-5 h-5" />
                               }
                             </button>
-                            <p className={`flex-1 text-xs font-semibold min-w-0 truncate ${
-                              watched ? 'text-slate-500 line-through' : 'text-white'
-                            }`}>
+
+                            {/* Title — clickable if has URL */}
+                            <p
+                              onClick={() => hasUrl && handlePlayVideo(video)}
+                              className={`flex-1 text-xs font-semibold min-w-0 truncate ${
+                                hasUrl ? 'cursor-pointer hover:text-purple-300' : ''
+                              } ${watched ? 'text-slate-500 line-through' : 'text-white'}`}
+                            >
                               {vIdx + 1}. {video.title}
                             </p>
-                            <span className="flex items-center gap-1 text-[10px] text-slate-500 font-bold flex-shrink-0">
-                              <Clock className="w-3 h-3" />
-                              {video.duration}
-                            </span>
+
+                            {/* Duration + watched toggle (independent) */}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="flex items-center gap-1 text-[10px] text-slate-500 font-bold">
+                                <Clock className="w-3 h-3" />
+                                {video.duration}
+                              </span>
+                              {/* Manual toggle for watched state, separate from play */}
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onToggleVideo(video.id) }}
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition cursor-pointer ${
+                                  watched
+                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-rose-500/10 hover:border-rose-500/20 hover:text-rose-400'
+                                    : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                                }`}
+                                title={watched ? 'Marcar como no visto' : 'Marcar como visto'}
+                              >
+                                {watched ? '✓' : '○'}
+                              </button>
+                            </div>
                           </div>
                         )
                       })}
@@ -171,6 +209,13 @@ export function StudentCourseView({ course, onBack, completedVideos, onToggleVid
           )
         })}
       </div>
+
+      <VideoPlayerModal
+        isOpen={!!playerVideo}
+        onClose={() => setPlayerVideo(null)}
+        videoUrl={playerVideo?.url}
+        title={playerVideo?.title}
+      />
     </div>
   )
 }

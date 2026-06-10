@@ -2,11 +2,12 @@ import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, Plus, Trash2, Edit2, Play, Check, X, Film, Clock, Eye, EyeOff } from 'lucide-react'
 
-export function ChapterAccordion({ 
-  chapters, 
-  onUpdateChapters, 
-  onTriggerUpload, 
-  addToast 
+export function ChapterAccordion({
+  chapters,
+  onUpdateChapters,
+  onTriggerUpload,
+  onPreviewVideo,
+  addToast,
 }) {
   const [expandedChapterId, setExpandedChapterId] = useState(chapters[0]?.id || null)
   const [editingChapterId, setEditingChapterId] = useState(null)
@@ -312,6 +313,17 @@ export function ChapterAccordion({
 
                                   {/* Right: Actions */}
                                   <div className="flex items-center gap-2 flex-shrink-0">
+                                    {/* Preview button — only if video has a real URL */}
+                                    {video.video_url && onPreviewVideo && (
+                                      <button
+                                        onClick={() => onPreviewVideo(video.video_url, video.title)}
+                                        className="p-1.5 text-slate-500 hover:text-purple-400 hover:bg-purple-500/10 rounded-lg transition duration-150 cursor-pointer border-0 bg-transparent"
+                                        title="Ver video"
+                                      >
+                                        <Play className="w-3.5 h-3.5 fill-current" />
+                                      </button>
+                                    )}
+
                                     {/* Publication Status button */}
                                     <button
                                       onClick={() => handleToggleVideoStatus(chapter.id, video.id)}

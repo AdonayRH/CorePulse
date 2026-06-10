@@ -679,6 +679,8 @@ export function TrainerDashboard() {
         }}
         onAddVideo={handleAddVideoToChapter}
         chapterId={activeChapterIdForUpload}
+        courseId={activeCourseId}
+        userId={profile?.id}
         addToast={addToast}
       />
     </div>

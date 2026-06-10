@@ -1,178 +1,162 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Film, UploadCloud, CheckCircle, AlertCircle, RefreshCw, Clock, ArrowRight } from 'lucide-react'
+import { X, Film, UploadCloud, CheckCircle, AlertCircle, RefreshCw, Clock } from 'lucide-react'
+import { uploadVideo, MAX_VIDEO_SIZE } from '../../lib/storage'
 
-export function VideoUploadModal({ 
-  isOpen, 
-  onClose, 
-  onAddVideo, 
-  chapterId, 
-  addToast 
+async function readVideoDuration(file) {
+  return new Promise((resolve) => {
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(video.src)
+      const total = Math.round(video.duration)
+      const mins = Math.floor(total / 60)
+      const secs = total % 60
+      resolve(`${mins}:${secs.toString().padStart(2, '0')}`)
+    }
+    video.onerror = () => resolve('')
+    video.src = URL.createObjectURL(file)
+  })
+}
+
+export function VideoUploadModal({
+  isOpen,
+  onClose,
+  onAddVideo,
+  chapterId,
+  courseId,
+  userId,
+  addToast,
 }) {
-  const [dragActive, setDragActive] = useState(false)
-  const [uploadState, setUploadState] = useState('idle') // 'idle', 'uploading', 'success', 'error'
+  const [uploadState, setUploadState] = useState('idle') // idle | uploading | done | error
   const [progress, setProgress] = useState(0)
-  const [fileName, setFileName] = useState('')
-  const [fileSize, setFileSize] = useState('')
-  
-  // Fields for the video lección metadata
+  const [videoUrl, setVideoUrl] = useState(null)
   const [videoTitle, setVideoTitle] = useState('')
   const [videoDuration, setVideoDuration] = useState('')
-  const [errors, setErrors] = useState({})
-  
+  const [errorMsg, setErrorMsg] = useState('')
+  const [dragActive, setDragActive] = useState(false)
   const fileInputRef = useRef(null)
+  const xhrRef = useRef(null)
+  const videoIdRef = useRef(null)
 
-  // Reset uploader state when modal toggles
   useEffect(() => {
     if (isOpen) {
       setUploadState('idle')
       setProgress(0)
-      setFileName('')
-      setFileSize('')
+      setVideoUrl(null)
       setVideoTitle('')
       setVideoDuration('')
-      setErrors({})
+      setErrorMsg('')
+      setDragActive(false)
     }
   }, [isOpen])
 
-  // --- DRAG & DROP EVENT HANDLERS ---
+  // Cancel in-flight upload if modal closes mid-upload
+  useEffect(() => {
+    return () => {
+      if (xhrRef.current) {
+        xhrRef.current.abort()
+        xhrRef.current = null
+      }
+    }
+  }, [])
+
+  const processFile = useCallback(async (file) => {
+    if (!file.type.startsWith('video/')) {
+      addToast('Solo se aceptan archivos de video (MP4, MOV, WebM...)', 'error')
+      return
+    }
+    if (file.size > MAX_VIDEO_SIZE) {
+      const gb = (file.size / 1024 / 1024 / 1024).toFixed(1)
+      addToast(`El archivo supera el límite de 2 GB (${gb} GB)`, 'error')
+      return
+    }
+
+    // Auto-fill title from filename
+    const autoTitle = file.name
+      .replace(/\.[^.]+$/, '')
+      .replace(/[_-]/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase())
+    setVideoTitle(autoTitle)
+
+    // Auto-detect duration from video metadata
+    const dur = await readVideoDuration(file)
+    setVideoDuration(dur)
+
+    const videoId = `video-${Date.now()}`
+    videoIdRef.current = videoId
+
+    setUploadState('uploading')
+    setProgress(0)
+
+    try {
+      const url = await uploadVideo(file, {
+        userId: userId || 'unknown',
+        courseId: courseId || 'uncategorized',
+        videoId,
+        onProgress: setProgress,
+        xhrRef,
+      })
+      setVideoUrl(url)
+      setUploadState('done')
+    } catch (err) {
+      if (err.message === 'Subida cancelada') return
+      setUploadState('error')
+      setErrorMsg(err.message)
+      addToast(err.message, 'error')
+    }
+  }, [userId, courseId, addToast])
+
   const handleDrag = (e) => {
     e.preventDefault()
     e.stopPropagation()
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true)
-    } else if (e.type === "dragleave") {
-      setDragActive(false)
-    }
+    setDragActive(e.type === 'dragenter' || e.type === 'dragover')
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0])
-    }
+    if (e.dataTransfer.files?.[0]) processFile(e.dataTransfer.files[0])
   }
 
-  const handleFileInputChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0])
-    }
-  }
-
-  // --- MOCK UPLOADING TIMERS ---
-  const processFile = (file) => {
-    const isVideo = file.type.startsWith('video/')
-    const sizeMB = (file.size / (1024 * 1024)).toFixed(1)
-    
-    setFileName(file.name)
-    setFileSize(`${sizeMB} MB`)
-
-    // Quick size validation mock (say files > 150MB trigger a mock size warning/error)
-    if (parseFloat(sizeMB) > 150) {
-      setUploadState('error')
-      addToast('Archivo demasiado pesado. El límite del plan es 150MB.', 'error')
-      return
-    }
-
-    // Auto-fill video title based on name (clean extension and replace underscores/dashes)
-    const cleanedName = file.name
-      .substring(0, file.name.lastIndexOf('.'))
-      .replace(/[_-]/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase())
-    setVideoTitle(cleanedName)
-
-    // Trigger mock uploading
-    setUploadState('uploading')
+  const handleCancelUpload = () => {
+    xhrRef.current?.abort()
+    xhrRef.current = null
+    setUploadState('idle')
     setProgress(0)
-  }
-
-  // Effect to simulate active uploading progress
-  useEffect(() => {
-    let interval
-    if (uploadState === 'uploading') {
-      interval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval)
-            setUploadState('success')
-            // Generate a random premium duration (e.g. between 5 and 20 mins)
-            const randomMins = Math.floor(Math.random() * 15) + 5
-            const randomSecs = Math.floor(Math.random() * 59)
-            const formattedSecs = randomSecs < 10 ? `0${randomSecs}` : randomSecs
-            setVideoDuration(`${randomMins}:${formattedSecs}`)
-            addToast('¡Video procesado y codificado correctamente!', 'success')
-            return 100
-          }
-          // Increment progress in random elegant steps
-          const increment = Math.floor(Math.random() * 15) + 8
-          return Math.min(prev + increment, 100)
-        })
-      }, 250)
-    }
-    return () => clearInterval(interval)
-  }, [uploadState])
-
-  const handleTriggerErrorSimulation = () => {
-    setUploadState('uploading')
-    setProgress(0)
-    setTimeout(() => {
-      setUploadState('error')
-      addToast('Error de conexión al servidor de codificación.', 'error')
-    }, 1200)
-  }
-
-  const handleSaveVideo = (e) => {
-    e.preventDefault()
-    const newErrors = {}
-
-    if (!videoTitle.trim()) newErrors.title = 'El título de la lección es obligatorio'
-    if (!videoDuration.trim()) newErrors.duration = 'La duración es obligatoria (Ej. 12:30)'
-    
-    // Duration pattern check: mm:ss
-    const durationPattern = /^\d+:\d{2}$/
-    if (videoDuration && !durationPattern.test(videoDuration)) {
-      newErrors.duration = 'Formato de duración inválido. Usa mm:ss (Ej. 08:45)'
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors)
-      return
-    }
-
-    onAddVideo(chapterId, {
-      id: `video-${Date.now()}`,
-      title: videoTitle.trim(),
-      duration: videoDuration.trim(),
-      status: 'published' // Default to published for trainers
-    })
-
-    onClose()
   }
 
   const handleRetry = () => {
     setUploadState('idle')
     setProgress(0)
-    setFileName('')
-    setFileSize('')
+    setVideoUrl(null)
+    setErrorMsg('')
   }
+
+  const handleSave = () => {
+    if (!videoTitle.trim() || !videoUrl) return
+    onAddVideo(chapterId, {
+      id: videoIdRef.current || `video-${Date.now()}`,
+      title: videoTitle.trim(),
+      duration: videoDuration || '0:00',
+      status: 'published',
+      video_url: videoUrl,
+    })
+    onClose()
+  }
+
+  const canSave = uploadState === 'done' && videoTitle.trim() && videoUrl
 
   return (
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={onClose}
             className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
-          ></motion.div>
-
-          {/* Modal Container */}
+          />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -180,18 +164,16 @@ export function VideoUploadModal({
             transition={{ duration: 0.2 }}
             className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl relative z-10 text-left"
           >
-            {/* Ambient subtle glow at top */}
-            <div className="absolute top-0 left-1/4 w-1/2 h-20 bg-gradient-to-r from-purple-500/10 to-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+            {/* Ambient glow */}
+            <div className="absolute top-0 left-1/4 w-1/2 h-20 bg-gradient-to-r from-purple-500/10 to-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
 
-            {/* Modal Header */}
-            <div className="px-6 py-5 border-b border-slate-850 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
                 <span className="w-8 h-8 bg-purple-500/10 rounded-lg flex items-center justify-center text-purple-400">
                   <Film className="w-4 h-4" />
                 </span>
-                <h2 className="text-xl font-extrabold text-white m-0">
-                  Subir Video Lección
-                </h2>
+                <h2 className="text-xl font-extrabold text-white m-0">Subir Video Lección</h2>
               </div>
               <button
                 onClick={onClose}
@@ -201,190 +183,136 @@ export function VideoUploadModal({
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6">
-              
-              {/* ─── FILE UPLOAD WORKSPACE ─── */}
-              <div className="mb-6">
-                
-                {/* IDLE STATE: Drag & Drop Zone */}
-                {uploadState === 'idle' && (
-                  <div
-                    onDragEnter={handleDrag}
-                    onDragOver={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current.click()}
-                    className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 ${
-                      dragActive
-                        ? 'border-purple-500 bg-purple-500/5 shadow-inner'
-                        : 'border-slate-800 hover:border-purple-500/30 bg-slate-950/40 hover:bg-slate-950/80'
-                    }`}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="video/*"
-                      onChange={handleFileInputChange}
-                      className="hidden"
-                    />
-                    <UploadCloud className={`w-10 h-10 mx-auto mb-4 transition-colors duration-300 ${dragActive ? 'text-purple-400' : 'text-slate-550'}`} />
-                    <p className="text-sm font-bold text-white mb-1">
-                      {dragActive ? '¡Suelta el archivo aquí!' : 'Arrastra tu lección en video aquí'}
-                    </p>
-                    <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                      o haz clic para explorar tus archivos locales. <br />
-                      Soporta MP4, MOV o AVI (Hasta 150MB para simulación).
-                    </p>
-                  </div>
-                )}
+            <div className="p-6 space-y-5">
 
-                {/* UPLOADING STATE: Interactive Progress */}
-                {uploadState === 'uploading' && (
-                  <div className="border border-slate-800 bg-slate-950/50 rounded-2xl p-6 text-center space-y-4">
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-slate-400">Subiendo video académico...</span>
-                      <span className="text-purple-400">{progress}%</span>
+              {/* IDLE: Drop zone */}
+              {uploadState === 'idle' && (
+                <div
+                  onDragEnter={handleDrag} onDragOver={handleDrag} onDragLeave={handleDrag} onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${
+                    dragActive
+                      ? 'border-purple-500 bg-purple-500/5'
+                      : 'border-slate-800 hover:border-purple-500/40 bg-slate-950/40'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="video/*"
+                    onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])}
+                    className="hidden"
+                  />
+                  <UploadCloud className={`w-10 h-10 mx-auto mb-3 transition-colors ${dragActive ? 'text-purple-400' : 'text-slate-600'}`} />
+                  <p className="text-sm font-bold text-white mb-1">
+                    {dragActive ? '¡Suelta aquí!' : 'Arrastra tu video aquí'}
+                  </p>
+                  <p className="text-xs text-slate-500">o haz clic para explorar · MP4, MOV, WebM · máx. 2 GB</p>
+                </div>
+              )}
+
+              {/* UPLOADING or DONE: progress + metadata form */}
+              {(uploadState === 'uploading' || uploadState === 'done') && (
+                <div className="space-y-5">
+                  {/* Progress bar */}
+                  <div className={`p-4 rounded-2xl border ${
+                    uploadState === 'done'
+                      ? 'border-emerald-500/20 bg-emerald-500/5'
+                      : 'border-slate-800 bg-slate-950/40'
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {uploadState === 'done'
+                          ? <CheckCircle className="w-4 h-4 text-emerald-400" />
+                          : <Film className="w-4 h-4 text-purple-400 animate-pulse" />
+                        }
+                        <span className="text-xs font-bold text-white">
+                          {uploadState === 'done' ? 'Video subido correctamente' : `Subiendo... ${progress}%`}
+                        </span>
+                      </div>
+                      {uploadState === 'uploading' && (
+                        <button
+                          onClick={handleCancelUpload}
+                          className="text-[10px] text-slate-500 hover:text-rose-400 font-bold transition cursor-pointer border-0 bg-transparent"
+                        >
+                          Cancelar
+                        </button>
+                      )}
                     </div>
-
-                    {/* Progress Bar Container */}
-                    <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-850">
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                       <motion.div
-                        className="bg-gradient-to-r from-purple-500 to-emerald-500 h-full rounded-full"
-                        style={{ width: `${progress}%` }}
-                        transition={{ ease: "easeInOut" }}
-                      ></motion.div>
-                    </div>
-
-                    <div className="flex justify-between items-center text-[10px] text-slate-500 font-semibold pt-1">
-                      <span className="truncate max-w-[200px]">{fileName}</span>
-                      <span>{fileSize}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* SUCCESS STATE: Completed preview */}
-                {uploadState === 'success' && (
-                  <div className="border border-emerald-500/20 bg-emerald-500/3 p-4 rounded-2xl flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
-                        <CheckCircle className="w-5 h-5 animate-scaleUp" />
-                      </div>
-                      <div className="text-left min-w-0">
-                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Listo</span>
-                        <p className="text-xs font-bold text-white truncate mt-1">{fileName}</p>
-                        <p className="text-[10px] text-slate-500">{fileSize}</p>
-                      </div>
-                    </div>
-                    
-                    <button
-                      onClick={handleRetry}
-                      className="text-xs text-slate-500 hover:text-white px-3 py-1.5 hover:bg-slate-900 border border-slate-850 hover:border-slate-800 rounded-lg transition duration-200 cursor-pointer bg-transparent"
-                    >
-                      Cambiar
-                    </button>
-                  </div>
-                )}
-
-                {/* ERROR STATE: Failed uploader */}
-                {uploadState === 'error' && (
-                  <div className="border border-rose-500/20 bg-rose-500/3 p-6 rounded-2xl text-center space-y-4">
-                    <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-450 mx-auto">
-                      <AlertCircle className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-white">Fallo en la subida del video</p>
-                      <p className="text-xs text-slate-550 mt-1">El archivo supera los 150MB o el servidor falló.</p>
-                    </div>
-                    <div className="flex items-center justify-center gap-3">
-                      <button
-                        onClick={handleRetry}
-                        className="px-4 py-2 border border-slate-800 bg-slate-950 text-slate-350 hover:text-white hover:bg-slate-900 text-xs font-bold rounded-xl transition cursor-pointer"
-                      >
-                        Buscar otro
-                      </button>
-                      <button
-                        onClick={() => {
-                          setUploadState('uploading')
-                          setProgress(0)
-                        }}
-                        className="px-4 py-2 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-400 hover:text-white text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        Reintentar
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-              </div>
-
-              {/* ─── METADATA FORMS AREA ─── */}
-              {uploadState === 'success' && (
-                <form onSubmit={handleSaveVideo} className="space-y-4 border-t border-slate-900/60 pt-5">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Título de la Lección</label>
-                    <input
-                      type="text"
-                      value={videoTitle}
-                      onChange={(e) => {
-                        setVideoTitle(e.target.value)
-                        if (errors.title) setErrors(prev => ({ ...prev, title: null }))
-                      }}
-                      placeholder="Ej. Anatomía del Cuádriceps y Biomecánica"
-                      className="w-full bg-slate-950 border border-slate-850 focus:border-purple-500 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-purple-500 transition duration-200"
-                    />
-                    {errors.title && <p className="text-[11px] text-rose-450 font-medium text-left">{errors.title}</p>}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Duración del Video (mm:ss)</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-600">
-                        <Clock className="w-3.5 h-3.5" />
-                      </span>
-                      <input
-                        type="text"
-                        value={videoDuration}
-                        onChange={(e) => {
-                          setVideoDuration(e.target.value)
-                          if (errors.duration) setErrors(prev => ({ ...prev, duration: null }))
-                        }}
-                        placeholder="Ej. 14:45"
-                        className="w-full bg-slate-950 border border-slate-850 focus:border-purple-500 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-purple-500 transition duration-200"
+                        className={`h-full rounded-full ${uploadState === 'done' ? 'bg-emerald-500' : 'bg-gradient-to-r from-purple-500 to-emerald-500'}`}
+                        animate={{ width: `${progress}%` }}
+                        transition={{ ease: 'easeOut' }}
                       />
                     </div>
-                    {errors.duration && <p className="text-[11px] text-rose-450 font-medium text-left">{errors.duration}</p>}
                   </div>
 
-                  {/* Form Actions */}
-                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-850">
+                  {/* Metadata form — fills in during upload so user isn't waiting */}
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Título de la Lección
+                      </label>
+                      <input
+                        type="text"
+                        value={videoTitle}
+                        onChange={(e) => setVideoTitle(e.target.value)}
+                        placeholder="Ej. Biomecánica de la sentadilla"
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 transition duration-200"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Duración (detectada automáticamente)
+                      </label>
+                      <div className="relative">
+                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={videoDuration}
+                          onChange={(e) => setVideoDuration(e.target.value)}
+                          placeholder="mm:ss"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500 transition duration-200"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-3 pt-2 border-t border-slate-800/60">
                     <button
-                      type="button"
-                      onClick={onClose}
-                      className="bg-transparent hover:bg-slate-850 border border-slate-800 text-slate-350 hover:text-white font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer"
+                      type="button" onClick={onClose}
+                      className="flex-1 bg-transparent hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white font-bold text-xs px-4 py-3 rounded-xl transition cursor-pointer"
                     >
                       Cancelar
                     </button>
                     <button
-                      type="submit"
-                      className="bg-gradient-to-r from-purple-500 to-emerald-500 hover:from-purple-650 hover:to-emerald-650 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition duration-200 active:scale-95 cursor-pointer border-0"
+                      type="button" onClick={handleSave} disabled={!canSave}
+                      className="flex-1 bg-gradient-to-r from-purple-500 to-emerald-500 hover:from-purple-600 hover:to-emerald-600 text-white font-extrabold text-xs px-5 py-3 rounded-xl transition active:scale-95 cursor-pointer border-0 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      Añadir Video Lección
+                      {uploadState === 'uploading' ? `Subiendo ${progress}%...` : 'Añadir Lección'}
                     </button>
                   </div>
-                </form>
+                </div>
               )}
 
-              {/* IDLE DEMO TOGGLES */}
-              {uploadState === 'idle' && (
-                <div className="mt-4 flex items-center justify-between p-3.5 bg-slate-950 border border-slate-900 rounded-xl text-[10px] text-slate-500 font-semibold">
-                  <span>🛠️ Simular Fallo:</span>
+              {/* ERROR */}
+              {uploadState === 'error' && (
+                <div className="border border-rose-500/20 bg-rose-500/5 p-6 rounded-2xl text-center space-y-4">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mx-auto">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">Error al subir el video</p>
+                    <p className="text-xs text-slate-500 mt-1">{errorMsg}</p>
+                  </div>
                   <button
-                    onClick={handleTriggerErrorSimulation}
-                    className="px-3 py-1 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 rounded-md transition duration-200 text-[9px] cursor-pointer"
+                    onClick={handleRetry}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 border border-slate-800 text-slate-300 hover:text-white text-xs font-bold rounded-xl transition cursor-pointer"
                   >
-                    Simular Error de Conexión
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Intentar de nuevo
                   </button>
                 </div>
               )}
