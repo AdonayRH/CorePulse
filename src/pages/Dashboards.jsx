@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useSubscription } from '../hooks/useSubscription'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, Dumbbell, PlayCircle, ArrowLeft, Lock, AlertTriangle, Clock, LogOut } from 'lucide-react'
+import { BookOpen, Dumbbell, PlayCircle, ArrowLeft, Lock, AlertTriangle, Clock, LogOut, Plus, Utensils, ChefHat } from 'lucide-react'
 
 // --- Dashboard Component Imports ---
 import { Navbar } from '../components/dashboard/Navbar'
@@ -14,6 +14,16 @@ import { VideoUploadModal } from '../components/dashboard/VideoUploadModal'
 import { ToastContainer } from '../components/dashboard/Toast'
 import { StudentCourseCard } from '../components/dashboard/StudentCourseCard'
 import { StudentCourseView } from '../components/dashboard/StudentCourseView'
+import { RecipeCard } from '../components/dashboard/RecipeCard'
+import { RecipeDetailView } from '../components/dashboard/RecipeDetailView'
+import { RecipeUserView } from '../components/dashboard/RecipeUserView'
+import { MealPlannerCalendar } from '../components/dashboard/MealPlannerCalendar'
+import { UserMealCalendar } from '../components/dashboard/UserMealCalendar'
+import {
+  fetchTrainerRecipes, createRecipe, updateRecipe,
+  deleteRecipe, toggleRecipeStatus, fetchAssignedRecipes,
+} from '../lib/recipes'
+import { fetchUserMealPlan } from '../lib/mealPlans'
 
 // --- Initial Mock Data Schema ---
 const INITIAL_COURSES = [
@@ -87,6 +97,7 @@ const INITIAL_COURSES = [
   }
 ]
 
+
 const GATE_CONFIG = {
   none: {
     Icon: Lock,
@@ -158,6 +169,26 @@ export function UserDashboard() {
       c.category?.toLowerCase().includes(q)
     )
   }, [courses, searchQuery])
+
+  const [assignedRecipes, setAssignedRecipes] = useState([])
+  const [assignedRecipesLoading, setAssignedRecipesLoading] = useState(false)
+  const [activeNutritionRecipe, setActiveNutritionRecipe] = useState(null)
+  const [mealPlanEntries, setMealPlanEntries] = useState([])
+  const [mealPlanLoading, setMealPlanLoading] = useState(false)
+
+  useEffect(() => {
+    if (!profile?.id) return
+    setAssignedRecipesLoading(true)
+    fetchAssignedRecipes()
+      .then(data => setAssignedRecipes(data))
+      .catch(() => {})
+      .finally(() => setAssignedRecipesLoading(false))
+    setMealPlanLoading(true)
+    fetchUserMealPlan()
+      .then(data => setMealPlanEntries(data))
+      .catch(() => {})
+      .finally(() => setMealPlanLoading(false))
+  }, [profile?.id])
 
   const addToast = (message, type = 'success') => {
     const id = `toast-${Date.now()}`
@@ -286,7 +317,8 @@ export function UserDashboard() {
         activeTab={activeTab}
         setActiveTab={(tab) => {
           setActiveTab(tab)
-          if (tab === 'courses') setActiveCourseId(null)
+          if (tab !== 'nutrition') setActiveNutritionRecipe(null)
+          if (tab !== 'courses') setActiveCourseId(null)
         }}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -309,6 +341,95 @@ export function UserDashboard() {
                 completedVideos={completedVideos}
                 onToggleVideo={handleToggleVideo}
               />
+            </motion.section>
+          ) : activeNutritionRecipe ? (
+            <motion.section
+              key="recipe-detail"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.25 }}
+            >
+              <RecipeUserView
+                recipe={activeNutritionRecipe}
+                onBack={() => setActiveNutritionRecipe(null)}
+              />
+            </motion.section>
+          ) : activeTab === 'nutrition' ? (
+            <motion.section
+              key="nutrition-list"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-8"
+            >
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight">Nutrición</h1>
+                <p className="text-slate-400 text-sm mt-1">Tu plan alimenticio semanal y recetas asignadas.</p>
+              </div>
+
+              {/* Weekly meal plan calendar */}
+              {mealPlanLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-7 h-7 border-2 border-purple-500/40 border-t-purple-500 rounded-full animate-spin" />
+                </div>
+              ) : (
+                <UserMealCalendar
+                  entries={mealPlanEntries}
+                  onViewRecipe={setActiveNutritionRecipe}
+                />
+              )}
+
+              {/* Assigned recipes library */}
+              {assignedRecipesLoading ? (
+                <div className="flex justify-center py-10">
+                  <div className="w-7 h-7 border-2 border-purple-500/40 border-t-purple-500 rounded-full animate-spin" />
+                </div>
+              ) : assignedRecipes.length === 0 && mealPlanEntries.length === 0 ? (
+                <div className="text-center py-16 bg-slate-900/20 border border-slate-800/80 rounded-3xl">
+                  <ChefHat className="w-10 h-10 text-slate-700 mx-auto mb-4" />
+                  <p className="text-slate-400 font-bold">Sin contenido nutricional todavía</p>
+                  <p className="text-slate-600 text-xs mt-1">Tu entrenador aún no te ha asignado recetas ni plan semanal</p>
+                </div>
+              ) : assignedRecipes.length > 0 ? (
+                <div className="space-y-4">
+                  <h2 className="text-lg font-black text-white">Recetario</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {assignedRecipes.map(recipe => {
+                      const totalTime = (recipe.prepTime || 0) + (recipe.cookTime || 0)
+                      return (
+                        <motion.button
+                          key={recipe.id}
+                          onClick={() => setActiveNutritionRecipe(recipe)}
+                          whileHover={{ y: -2 }}
+                          className="w-full text-left bg-slate-900/30 border border-slate-800/80 backdrop-blur-md rounded-2xl p-5 space-y-3 cursor-pointer hover:border-purple-500/40 transition-colors duration-200"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <h3 className="text-sm font-black text-white leading-snug">{recipe.name}</h3>
+                            {totalTime > 0 && (
+                              <span className="flex items-center gap-1 text-[10px] font-bold text-slate-500 flex-shrink-0">
+                                <Clock className="w-3 h-3" />{totalTime} min
+                              </span>
+                            )}
+                          </div>
+                          {recipe.description && (
+                            <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{recipe.description}</p>
+                          )}
+                          <div className="flex items-center justify-between pt-1">
+                            {recipe.nutrition?.calories > 0 ? (
+                              <span className="text-[10px] font-bold text-amber-400">{recipe.nutrition.calories} kcal</span>
+                            ) : <span />}
+                            <span className="text-[10px] font-bold text-purple-400 flex items-center gap-1">
+                              <Utensils className="w-3 h-3" /> Ver receta
+                            </span>
+                          </div>
+                        </motion.button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </motion.section>
           ) : (
             <motion.section
@@ -395,8 +516,10 @@ export function UserDashboard() {
 export function TrainerDashboard() {
   const { profile, signOut } = useAuth()
 
-  // Tab states: 'courses' or 'exercises'
+  // Tab states: 'courses' | 'nutrition' | 'exercises'
   const [activeTab, setActiveTab] = useState('courses')
+  // Nutrition sub-view: 'recipes' | 'planner'
+  const [nutritionView, setNutritionView] = useState('recipes')
   const [searchQuery, setSearchQuery] = useState('')
 
   // Custom toast list state
@@ -412,6 +535,72 @@ export function TrainerDashboard() {
   useEffect(() => {
     localStorage.setItem('corepulse_trainer_courses', JSON.stringify(courses))
   }, [courses])
+
+  // ─── RECIPES STATE (Supabase) ─────────────────────────────────────────────
+  const [recipes, setRecipes] = useState([])
+  const [recipesLoading, setRecipesLoading] = useState(true)
+  const [activeRecipeId, setActiveRecipeId] = useState(null)
+
+  useEffect(() => {
+    if (!profile?.id) return
+    setRecipesLoading(true)
+    fetchTrainerRecipes(profile.id)
+      .then(data => setRecipes(data))
+      .catch(() => addToast('Error al cargar las recetas', 'error'))
+      .finally(() => setRecipesLoading(false))
+  }, [profile?.id])
+
+  const handleCreateRecipe = async () => {
+    try {
+      const created = await createRecipe(profile.id, {
+        name: 'Nueva Receta', category: 'almuerzo', description: '',
+        servings: 1, prepTime: 15, cookTime: 30, status: 'draft',
+        ingredients: [], steps: [],
+        nutrition: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+        allergens: [],
+      })
+      setRecipes(prev => [created, ...prev])
+      setActiveRecipeId(created.id)
+    } catch {
+      addToast('Error al crear la receta', 'error')
+    }
+  }
+
+  const handleSaveRecipe = async (updatedRecipe) => {
+    try {
+      const saved = await updateRecipe(updatedRecipe.id, updatedRecipe)
+      setRecipes(prev => prev.map(r => r.id === saved.id ? saved : r))
+      addToast('¡Receta guardada correctamente!', 'success')
+    } catch {
+      addToast('Error al guardar la receta', 'error')
+    }
+  }
+
+  const handleDeleteRecipe = async (recipeId) => {
+    if (!confirm('¿Eliminar esta receta? Esta acción no se puede deshacer.')) return
+    try {
+      await deleteRecipe(recipeId)
+      setRecipes(prev => prev.filter(r => r.id !== recipeId))
+      setActiveRecipeId(null)
+      addToast('Receta eliminada.', 'info')
+    } catch {
+      addToast('Error al eliminar la receta', 'error')
+    }
+  }
+
+  const handleToggleRecipeStatus = async (recipeId) => {
+    const recipe = recipes.find(r => r.id === recipeId)
+    if (!recipe) return
+    try {
+      const updated = await toggleRecipeStatus(recipeId, recipe.status)
+      setRecipes(prev => prev.map(r => r.id === recipeId ? updated : r))
+      addToast(updated.status === 'published' ? '¡Receta publicada!' : 'Receta guardada como borrador.', 'success')
+    } catch {
+      addToast('Error al cambiar el estado', 'error')
+    }
+  }
+
+  const activeRecipe = recipes.find(r => r.id === activeRecipeId)
 
   // --- MODALS TOGGLES ---
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false)
@@ -564,7 +753,8 @@ export function TrainerDashboard() {
         activeTab={activeTab}
         setActiveTab={(tab) => {
           setActiveTab(tab)
-          if (tab === 'courses') setActiveCourseId(null) // return to list when clicking Courses
+          if (tab === 'courses') setActiveCourseId(null)
+          if (tab === 'nutrition') setActiveRecipeId(null)
         }}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -574,7 +764,115 @@ export function TrainerDashboard() {
       {/* ─── MAIN DASHBOARD WORKSPACE ─── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-10 relative">
         <AnimatePresence mode="wait">
-          {activeTab === 'exercises' ? (
+          {activeTab === 'nutrition' ? (
+            /* ─── NUTRITION / RECIPES TAB ─── */
+            activeRecipeId && activeRecipe ? (
+              <motion.section
+                key="recipe-detail"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.25 }}
+              >
+                <RecipeDetailView
+                  recipe={activeRecipe}
+                  onBack={() => setActiveRecipeId(null)}
+                  onSave={handleSaveRecipe}
+                  onDelete={handleDeleteRecipe}
+                  addToast={addToast}
+                />
+              </motion.section>
+            ) : (
+              <motion.section
+                key="recipe-list"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-8"
+              >
+                {/* Header + Sub-nav */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-black text-white tracking-tight">Nutrición</h1>
+                    <p className="text-slate-400 text-sm mt-1">
+                      {nutritionView === 'recipes'
+                        ? `${recipes.filter(r => r.status === 'published').length} publicadas · ${recipes.filter(r => r.status === 'draft').length} borradores`
+                        : 'Planifica las comidas semanales de cada alumno'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* Sub-nav toggle */}
+                    <div className="flex items-center gap-1 bg-slate-900/60 border border-slate-800 rounded-xl p-1">
+                      {[
+                        { key: 'recipes', label: 'Recetas' },
+                        { key: 'planner', label: 'Planificador' },
+                      ].map(v => (
+                        <button
+                          key={v.key}
+                          onClick={() => setNutritionView(v.key)}
+                          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer border-0 ${
+                            nutritionView === v.key
+                              ? 'bg-purple-500/20 text-purple-300'
+                              : 'bg-transparent text-slate-500 hover:text-white'
+                          }`}
+                        >
+                          {v.label}
+                        </button>
+                      ))}
+                    </div>
+                    {nutritionView === 'recipes' && (
+                      <button
+                        onClick={handleCreateRecipe}
+                        className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-500 to-emerald-500 hover:from-purple-600 hover:to-emerald-600 text-white font-extrabold text-xs rounded-2xl transition active:scale-95 cursor-pointer border-0 shadow-lg shadow-purple-500/10"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Nueva Receta
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {nutritionView === 'planner' ? (
+                  <MealPlannerCalendar
+                    trainerId={profile?.id}
+                    recipes={recipes}
+                    addToast={addToast}
+                  />
+                ) : recipesLoading ? (
+                  <div className="flex justify-center py-16">
+                    <div className="w-8 h-8 border-2 border-purple-500/40 border-t-purple-500 rounded-full animate-spin" />
+                  </div>
+                ) : recipes.length === 0 ? (
+                  <div className="border border-dashed border-slate-800 rounded-3xl p-16 text-center space-y-5">
+                    <div className="w-14 h-14 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center mx-auto text-2xl">🥗</div>
+                    <div>
+                      <p className="text-sm font-bold text-white">No hay recetas todavía</p>
+                      <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">Crea tu primera receta con ingredientes, pasos de preparación y valores nutricionales.</p>
+                    </div>
+                    <button
+                      onClick={handleCreateRecipe}
+                      className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-purple-400 font-bold text-xs rounded-xl transition cursor-pointer"
+                    >
+                      Crear primera receta
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {recipes.map(recipe => (
+                      <RecipeCard
+                        key={recipe.id}
+                        recipe={recipe}
+                        onEdit={() => setActiveRecipeId(recipe.id)}
+                        onDelete={handleDeleteRecipe}
+                        onToggleStatus={handleToggleRecipeStatus}
+                      />
+                    ))}
+                  </div>
+                )}
+              </motion.section>
+            )
+          ) : activeTab === 'exercises' ? (
             /* COMING SOON EXERCISES PANEL */
             <motion.section
               key="exercises-view"

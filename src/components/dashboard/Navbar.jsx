@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu, X, Search, LogOut, User, BookOpen, Dumbbell, ChevronDown } from 'lucide-react'
+import { Menu, X, Search, LogOut, User, BookOpen, Dumbbell, Utensils, ChevronDown } from 'lucide-react'
 import { ProfileModal } from './ProfileModal'
 import { Logo } from '../Logo'
 
@@ -28,6 +28,11 @@ export function Navbar({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  const handleNutritionClick = () => {
+    setActiveTab('nutrition')
+    setMobileMenuOpen(false)
+  }
 
   const handleExercisesClick = () => {
     if (addToast) {
@@ -77,6 +82,17 @@ export function Navbar({
             >
               <BookOpen className="w-4 h-4" />
               Cursos
+            </button>
+            <button
+              onClick={handleNutritionClick}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer border-0 bg-transparent ${
+                activeTab === 'nutrition'
+                  ? 'bg-purple-500/10 text-purple-400'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/50'
+              }`}
+            >
+              <Utensils className="w-4 h-4" />
+              Nutrición
             </button>
             <button
               onClick={handleExercisesClick}
@@ -205,6 +221,17 @@ export function Navbar({
             >
               <BookOpen className="w-5 h-5" />
               Cursos
+            </button>
+            <button
+              onClick={handleNutritionClick}
+              className={`flex items-center gap-3 px-4 py-3.5 rounded-xl text-base font-bold transition duration-200 cursor-pointer border-0 w-full text-left bg-transparent ${
+                activeTab === 'nutrition'
+                  ? 'bg-purple-500/10 text-purple-400'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
+              }`}
+            >
+              <Utensils className="w-5 h-5" />
+              Nutrición
             </button>
             <button
               onClick={handleExercisesClick}
