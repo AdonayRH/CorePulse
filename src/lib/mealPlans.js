@@ -43,14 +43,14 @@ export async function fetchTrainerMealPlan(userId) {
   return (data || []).map(toFrontend)
 }
 
-// User: fetch own meal plan (RLS filters automatically)
+// User: fetch own meal plan — only structural data (recipe injected in dashboard from assignedRecipes)
 export async function fetchUserMealPlan() {
   const { data, error } = await supabase
     .from('meal_plan_entries')
-    .select(`*, recipe:recipe_id(${RECIPE_FIELDS})`)
+    .select('id, trainer_id, user_id, recipe_id, day_of_week, meal_slot')
     .order('day_of_week')
   if (error) throw error
-  return (data || []).map(toFrontend)
+  return (data || []).map(row => ({ ...toFrontend({ ...row, recipe: null }) }))
 }
 
 // Trainer: set (upsert) a cell in a user's plan

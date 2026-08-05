@@ -19,11 +19,18 @@ import { RecipeDetailView } from '../components/dashboard/RecipeDetailView'
 import { RecipeUserView } from '../components/dashboard/RecipeUserView'
 import { MealPlannerCalendar } from '../components/dashboard/MealPlannerCalendar'
 import { UserMealCalendar } from '../components/dashboard/UserMealCalendar'
+import { RoutineCard } from '../components/dashboard/RoutineCard'
+import { RoutineDetailView } from '../components/dashboard/RoutineDetailView'
+import { UserRoutineView } from '../components/dashboard/UserRoutineView'
 import {
   fetchTrainerRecipes, createRecipe, updateRecipe,
   deleteRecipe, toggleRecipeStatus, fetchAssignedRecipes,
 } from '../lib/recipes'
 import { fetchUserMealPlan } from '../lib/mealPlans'
+import {
+  fetchTrainerRoutines, createRoutine, updateRoutine,
+  deleteRoutine, toggleRoutineStatus, fetchAssignedRoutines,
+} from '../lib/routines'
 
 // --- Initial Mock Data Schema ---
 const INITIAL_COURSES = [
@@ -175,9 +182,12 @@ export function UserDashboard() {
   const [activeNutritionRecipe, setActiveNutritionRecipe] = useState(null)
   const [mealPlanEntries, setMealPlanEntries] = useState([])
   const [mealPlanLoading, setMealPlanLoading] = useState(false)
+  const [assignedRoutines, setAssignedRoutines] = useState([])
+  const [routinesLoading, setRoutinesLoading] = useState(false)
+  const [activeRoutine, setActiveRoutine] = useState(null)
 
   useEffect(() => {
-    if (!profile?.id) return
+    if (!profile?.id || isTrainer || isAdmin) return
     setAssignedRecipesLoading(true)
     fetchAssignedRecipes()
       .then(data => setAssignedRecipes(data))
@@ -188,7 +198,21 @@ export function UserDashboard() {
       .then(data => setMealPlanEntries(data))
       .catch(() => {})
       .finally(() => setMealPlanLoading(false))
-  }, [profile?.id])
+    setRoutinesLoading(true)
+    fetchAssignedRoutines()
+      .then(data => setAssignedRoutines(data))
+      .catch(() => {})
+      .finally(() => setRoutinesLoading(false))
+  }, [profile?.id, isTrainer, isAdmin])
+
+  // Enrich meal plan entries with full recipe data from assignedRecipes (avoids double fetch)
+  const enrichedMealPlan = useMemo(() =>
+    mealPlanEntries.map(entry => ({
+      ...entry,
+      recipe: assignedRecipes.find(r => r.id === entry.recipeId) ?? null,
+    })),
+    [mealPlanEntries, assignedRecipes]
+  )
 
   const addToast = (message, type = 'success') => {
     const id = `toast-${Date.now()}`
@@ -317,8 +341,9 @@ export function UserDashboard() {
         activeTab={activeTab}
         setActiveTab={(tab) => {
           setActiveTab(tab)
-          if (tab !== 'nutrition') setActiveNutritionRecipe(null)
-          if (tab !== 'courses') setActiveCourseId(null)
+          if (tab !== 'nutrition')  setActiveNutritionRecipe(null)
+          if (tab !== 'courses')    setActiveCourseId(null)
+          if (tab !== 'exercises')  setActiveRoutine(null)
         }}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -355,6 +380,85 @@ export function UserDashboard() {
                 onBack={() => setActiveNutritionRecipe(null)}
               />
             </motion.section>
+          ) : activeTab === 'exercises' && activeRoutine ? (
+            <motion.section
+              key="routine-detail"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.25 }}
+            >
+              <UserRoutineView
+                routine={activeRoutine}
+                onBack={() => setActiveRoutine(null)}
+              />
+            </motion.section>
+          ) : activeTab === 'exercises' ? (
+            <motion.section
+              key="exercises-list"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.25 }}
+              className="space-y-8"
+            >
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight">Ejercicios</h1>
+                <p className="text-slate-400 text-sm mt-1">Rutinas asignadas por tu entrenador.</p>
+              </div>
+
+              {routinesLoading ? (
+                <div className="flex justify-center py-20">
+                  <div className="w-8 h-8 border-2 border-purple-500/40 border-t-purple-500 rounded-full animate-spin" />
+                </div>
+              ) : assignedRoutines.length === 0 ? (
+                <div className="text-center py-20 bg-slate-900/20 border border-slate-800/80 rounded-3xl">
+                  <Dumbbell className="w-10 h-10 text-slate-700 mx-auto mb-4" />
+                  <p className="text-slate-400 font-bold">Sin rutinas asignadas</p>
+                  <p className="text-slate-600 text-xs mt-1">Tu entrenador aún no te ha asignado ninguna rutina</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {assignedRoutines.map(routine => {
+                    const allMuscles = [...new Set(routine.exercises.flatMap(e => e.muscleGroups || []))]
+                    const totalSets  = routine.exercises.reduce((sum, e) => sum + (e.sets?.length || 0), 0)
+                    return (
+                      <motion.button
+                        key={routine.id}
+                        onClick={() => setActiveRoutine(routine)}
+                        whileHover={{ y: -2 }}
+                        className="w-full text-left bg-slate-900/30 border border-slate-800/80 backdrop-blur-md rounded-2xl p-5 space-y-3 cursor-pointer hover:border-purple-500/40 transition-colors duration-200"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 flex-shrink-0 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center justify-center">
+                            <Dumbbell className="w-4.5 h-4.5 text-purple-400" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-sm font-black text-white leading-snug">{routine.name}</h3>
+                            <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                              {routine.exercises.length} ejercicios · {totalSets} series
+                            </p>
+                          </div>
+                        </div>
+                        {routine.description && (
+                          <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{routine.description}</p>
+                        )}
+                        {allMuscles.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {allMuscles.slice(0, 4).map(m => (
+                              <span key={m} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/40 text-slate-400">{m}</span>
+                            ))}
+                            {allMuscles.length > 4 && (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/40 text-slate-500">+{allMuscles.length - 4}</span>
+                            )}
+                          </div>
+                        )}
+                      </motion.button>
+                    )
+                  })}
+                </div>
+              )}
+            </motion.section>
           ) : activeTab === 'nutrition' ? (
             <motion.section
               key="nutrition-list"
@@ -376,7 +480,7 @@ export function UserDashboard() {
                 </div>
               ) : (
                 <UserMealCalendar
-                  entries={mealPlanEntries}
+                  entries={enrichedMealPlan}
                   onViewRecipe={setActiveNutritionRecipe}
                 />
               )}
@@ -601,6 +705,68 @@ export function TrainerDashboard() {
   }
 
   const activeRecipe = recipes.find(r => r.id === activeRecipeId)
+
+  // ─── ROUTINES STATE (Supabase) ────────────────────────────────────────────
+  const [routines, setRoutines]             = useState([])
+  const [trainerRoutinesLoading, setTrainerRoutinesLoading] = useState(true)
+  const [activeRoutineId, setActiveRoutineId] = useState(null)
+
+  useEffect(() => {
+    if (!profile?.id) return
+    setTrainerRoutinesLoading(true)
+    fetchTrainerRoutines(profile.id)
+      .then(data => setRoutines(data))
+      .catch(() => addToast('Error al cargar las rutinas', 'error'))
+      .finally(() => setTrainerRoutinesLoading(false))
+  }, [profile?.id])
+
+  const handleCreateRoutine = async () => {
+    try {
+      const created = await createRoutine(profile.id, {
+        name: 'Nueva Rutina', description: '', status: 'draft', exercises: [],
+      })
+      setRoutines(prev => [created, ...prev])
+      setActiveRoutineId(created.id)
+    } catch {
+      addToast('Error al crear la rutina', 'error')
+    }
+  }
+
+  const handleSaveRoutine = async (updatedRoutine) => {
+    try {
+      const saved = await updateRoutine(updatedRoutine.id, updatedRoutine)
+      setRoutines(prev => prev.map(r => r.id === saved.id ? saved : r))
+      addToast('¡Rutina guardada correctamente!', 'success')
+    } catch {
+      addToast('Error al guardar la rutina', 'error')
+    }
+  }
+
+  const handleDeleteRoutine = async (routineId) => {
+    if (!confirm('¿Eliminar esta rutina? Esta acción no se puede deshacer.')) return
+    try {
+      await deleteRoutine(routineId)
+      setRoutines(prev => prev.filter(r => r.id !== routineId))
+      setActiveRoutineId(null)
+      addToast('Rutina eliminada.', 'info')
+    } catch {
+      addToast('Error al eliminar la rutina', 'error')
+    }
+  }
+
+  const handleToggleRoutineStatus = async (routineId) => {
+    const routine = routines.find(r => r.id === routineId)
+    if (!routine) return
+    try {
+      const updated = await toggleRoutineStatus(routineId, routine.status)
+      setRoutines(prev => prev.map(r => r.id === routineId ? updated : r))
+      addToast(updated.status === 'published' ? '¡Rutina publicada!' : 'Rutina guardada como borrador.', 'success')
+    } catch {
+      addToast('Error al cambiar el estado', 'error')
+    }
+  }
+
+  const activeRoutineTrainer = routines.find(r => r.id === activeRoutineId)
 
   // --- MODALS TOGGLES ---
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false)
@@ -873,41 +1039,83 @@ export function TrainerDashboard() {
               </motion.section>
             )
           ) : activeTab === 'exercises' ? (
-            /* COMING SOON EXERCISES PANEL */
-            <motion.section
-              key="exercises-view"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.25 }}
-              className="max-w-2xl mx-auto text-center py-16 space-y-8 relative overflow-hidden rounded-3xl border border-slate-850/60 bg-slate-900/10 backdrop-blur-md p-8 sm:p-12"
-            >
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-purple-500/5 rounded-full blur-[60px] pointer-events-none"></div>
+            /* ─── EXERCISES / ROUTINES TAB ─── */
+            activeRoutineId && activeRoutineTrainer ? (
+              <motion.section
+                key="routine-detail"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.25 }}
+              >
+                <RoutineDetailView
+                  routine={activeRoutineTrainer}
+                  onBack={() => setActiveRoutineId(null)}
+                  onSave={handleSaveRoutine}
+                  onDelete={handleDeleteRoutine}
+                  addToast={addToast}
+                />
+              </motion.section>
+            ) : (
+              <motion.section
+                key="routines-list"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-8"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-black text-white tracking-tight">Ejercicios & Rutinas</h1>
+                    <p className="text-slate-400 text-sm mt-1">
+                      {routines.filter(r => r.status === 'published').length} publicadas · {routines.filter(r => r.status === 'draft').length} borradores
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleCreateRoutine}
+                    className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-500 to-emerald-500 hover:from-purple-600 hover:to-emerald-600 text-white font-extrabold text-xs rounded-2xl transition active:scale-95 cursor-pointer border-0 shadow-lg shadow-purple-500/10"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Nueva Rutina
+                  </button>
+                </div>
 
-              <div className="w-16 h-16 bg-slate-950/80 border border-slate-850 rounded-2xl flex items-center justify-center mx-auto text-purple-400 shadow-2xl">
-                <Dumbbell className="w-7 h-7" />
-              </div>
-
-              <div className="space-y-3">
-                <h2 className="text-2xl font-black text-white tracking-tight leading-tight m-0">Gestor de Ejercicios & Rutinas</h2>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-500/10 border border-purple-500/30 text-purple-400 text-[10px] font-bold rounded-full uppercase tracking-wider mx-auto">
-                  🛠️ En Desarrollo
-                </span>
-                <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-md mx-auto pt-2">
-                  Muy pronto tendrás acceso completo a nuestra videoteca interactiva de musculación para estructurar entrenamientos en bucle y asignar rutinas a tus clientes.
-                </p>
-              </div>
-
-              <div className="flex justify-center pt-2">
-                <button
-                  onClick={() => setActiveTab('courses')}
-                  className="bg-gradient-to-r from-purple-500 to-emerald-500 hover:from-purple-650 hover:to-emerald-650 text-white font-extrabold text-xs px-6 py-3.5 rounded-xl transition duration-200 active:scale-95 flex items-center gap-2 cursor-pointer border-0 shadow-lg shadow-purple-500/10"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Volver a Cursos Académicos
-                </button>
-              </div>
-            </motion.section>
+                {trainerRoutinesLoading ? (
+                  <div className="flex justify-center py-16">
+                    <div className="w-8 h-8 border-2 border-purple-500/40 border-t-purple-500 rounded-full animate-spin" />
+                  </div>
+                ) : routines.length === 0 ? (
+                  <div className="border border-dashed border-slate-800 rounded-3xl p-16 text-center space-y-5">
+                    <div className="w-14 h-14 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center mx-auto">
+                      <Dumbbell className="w-6 h-6 text-slate-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white">No hay rutinas todavía</p>
+                      <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">Crea tu primera rutina con ejercicios, series y repeticiones para asignarla a tus alumnos.</p>
+                    </div>
+                    <button
+                      onClick={handleCreateRoutine}
+                      className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-purple-400 font-bold text-xs rounded-xl transition cursor-pointer"
+                    >
+                      Crear primera rutina
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {routines.map(routine => (
+                      <RoutineCard
+                        key={routine.id}
+                        routine={routine}
+                        onEdit={() => setActiveRoutineId(routine.id)}
+                        onDelete={handleDeleteRoutine}
+                        onToggleStatus={handleToggleRoutineStatus}
+                      />
+                    ))}
+                  </div>
+                )}
+              </motion.section>
+            )
           ) : activeCourseId && activeCourse ? (
             /* COURSE DETAIL & CURRICULUM EDIT WORKSPACE */
             <motion.section

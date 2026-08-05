@@ -35,9 +35,6 @@ export function Navbar({
   }
 
   const handleExercisesClick = () => {
-    if (addToast) {
-      addToast('Módulo de Ejercicios en desarrollo. ¡Pronto disponible para tus alumnos!', 'info')
-    }
     setActiveTab('exercises')
     setMobileMenuOpen(false)
   }
